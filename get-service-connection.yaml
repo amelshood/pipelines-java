@@ -1,0 +1,75 @@
+trigger:
+  - main
+
+parameters:
+  - name: organizationName
+    type: string
+    displayName: Organization Name
+    default: YourOrganizationName
+  - name: projectName
+    type: string
+    displayName: ADO Project Name
+    default: YourProjectName
+
+jobs:
+  - job: ExtractServiceConnections
+    displayName: Extract Service Connections
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.x'
+          addToPath: true
+
+      - script: |
+          python -m pip install azure-devops
+        displayName: Install Azure DevOps Python package
+
+      - script: |
+          python -c "
+          import json
+          from azure.devops.connection import Connection
+          from msrest.authentication import BasicAuthentication
+          from datetime import datetime
+
+          organization_url = 'https://dev.azure.com/$(organizationName)'
+          personal_access_token = '<YOUR_PERSONAL_ACCESS_TOKEN>'
+          project_name = '$(projectName)'
+
+          credentials = BasicAuthentication('', personal_access_token)
+          connection = Connection(base_url=organization_url, creds=credentials)
+
+          service_connections_api = connection.clients.get_service_connection_client()
+          service_connections = service_connections_api.get_service_connections(project=project_name)
+
+          data = []
+          for service_connection in service_connections:
+              pipeline = service_connection.pipeline
+              if pipeline is not None:
+                  data.append({
+                      'ServiceConnection': service_connection.name,
+                      'EndpointID': service_connection.endpoint_id,
+                      'Type': service_connection.type,
+                      'Creator': service_connection.creator.display_name,
+                      'PipelineName': pipeline.name,
+                      'CreationDate': pipeline.created_on.strftime('%Y-%m-%d'),
+                      'PipelineURL': pipeline.url
+                  })
+
+          with open('service_connections.json', 'w') as f:
+              json.dump(data, f)
+
+          import csv
+          keys = data[0].keys()
+          with open('service_connections.csv', 'w', newline='') as f:
+              writer = csv.DictWriter(f, keys)
+              writer.writeheader()
+              writer.writerows(data)
+          "
+        displayName: Extract and Generate Output
+
+      - task: PublishPipelineArtifact@1
+        inputs:
+          targetPath: '$(Pipeline.Workspace)'
+          artifact: 'ServiceConnections'
