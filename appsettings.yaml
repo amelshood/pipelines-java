@@ -1,0 +1,33 @@
+trigger:
+  branches:
+    include:
+      - main  # Update with your desired branch name
+
+pr:
+  branches:
+    include:
+      - main  # Update with your desired branch name
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - name: keyVaultName
+    value: 'your-key-vault-name'  # Update with your Key Vault name
+  - name: secretName
+    value: ''  # Provide the secret name during pipeline run
+  - name: appServiceSetting
+    value: ''  # Provide the app service setting name during pipeline run
+
+steps:
+  - task: AzureCLI@2
+    inputs:
+      azureSubscription: 'your-azure-subscription'  # Update with your Azure subscription name or ID
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        # Get the secret value from Key Vault
+        secretValue=$(az keyvault secret show --name $(secretName) --vault-name $(keyVaultName) --query 'value' -o tsv)
+        
+        # Set the app service setting using the secret value
+        az webapp config appsettings set --name 'your-app-service-name' --resource-group 'your-resource-group-name' --settings $(appServiceSetting)="$secretValue"
